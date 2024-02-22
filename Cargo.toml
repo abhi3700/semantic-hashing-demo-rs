@@ -1,0 +1,14 @@
+[package]
+name = "semantic-hashing-demo-rs"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ndarray = "0.15.6"
+ndarray-rand = "0.14.0"
+openai = "=1.0.0-alpha.14"
+polars = { version = "0.37.0", features = ["lazy"] }
+rand = "0.8.5"
+rand_pcg = "0.3.1"
