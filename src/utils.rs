@@ -1,39 +1,41 @@
 use eyre::bail;
-use ndarray::{Array1, Array2};
-use ndarray_rand::{rand_distr::Uniform, RandomExt};
-use rand::SeedableRng;
-use rand_pcg::Pcg64;
+use ndarray::Array1;
+use openai::embeddings::{Embedding, Embeddings};
 use std::{collections::HashMap, iter::zip};
 
-/// data file
+type Hyperplanes =
+	ndarray::prelude::ArrayBase<ndarray::OwnedRepr<f64>, ndarray::prelude::Dim<[usize; 2]>>;
+
 /// NOTE: This data file has around 570k text reviews (of types: single line, paragraph).
 /// So, parse accordingly depending on the computational resources for bucketing.
 pub(crate) const DATA_FILE: &str = "./data/fine_food_reviews_1k.csv";
 
-/// seed for hyperplane generation
-/// subspace address format prefix
+/// subspace address format prefix as seed for hyperplane generation
 pub(crate) const SEED: u64 = 2254;
 
-/// Get the embedding vector of a given text with default OpenAI embedding small model.
+/// Get the embedding vector of a vec of texts with default OpenAI embedding small model.
 /// Small embedding model: 1536 len of float values.
 /// Large embedding model: 3072 len of float values.
-pub(crate) fn get_embedding(text: String, model: &str) {
-	let text = text.replace('\n', " ");
+pub(crate) async fn get_embeddings(text_samples: Vec<String>, model: &str) -> Vec<Embedding> {
+	dotenv::dotenv().ok();
+	openai::set_key(std::env::var("OPENAI_API_KEY").expect("Provide OpenAI API key?"));
 
-	// TODO: create embedding
+	let owned_text_samples = text_samples
+		.iter()
+		.map(|text| text.replace('\n', " ").replace("<br />", ""))
+		.collect::<Vec<_>>();
+
+	// Then, create a Vec<&str> from the owned strings `Vec<String>`
+	let text_samples_refs = owned_text_samples.iter().map(AsRef::as_ref).collect::<Vec<&str>>();
+
+	// create embeddings
+	Embeddings::create(model, text_samples_refs, "").await.unwrap().data
 }
 
 /// LSH random projection hash function with seeded hyperplane generation.
-pub(crate) fn hash_vector(v: Vec<f64>, nbits: u16) -> String {
+pub(crate) fn hash_vector(v: Vec<f64>, hyperplanes: Hyperplanes) -> String {
 	// Convert Vec<Float64Type> to Array1<f64>
 	let v_array = Array1::from_vec(v);
-
-	// Create a seeded random number generator
-	let mut rng = Pcg64::seed_from_u64(SEED);
-
-	// Generate hyperplanes
-	let hyperplanes =
-		Array2::random_using((nbits as usize, v_array.len()), Uniform::new(-0.5, 0.5), &mut rng);
 
 	// Dot product and thresholding to generate binary hash
 	// Explicitly specify the expected type of `v_dot` as Array1<f64>
@@ -46,16 +48,16 @@ pub(crate) fn hash_vector(v: Vec<f64>, nbits: u16) -> String {
 }
 
 /// Distribute hashes into corresponding buckets
-pub(crate) fn bucket_hashes(v: Vec<&str>) -> HashMap<String, Vec<u128>> {
+pub(crate) fn bucket_hashes(v: Vec<String>) -> HashMap<String, Vec<u128>> {
 	let mut buckets = HashMap::new();
 
-	for (i, &hash_str) in v.iter().enumerate() {
+	for (i, hash_str) in v.iter().enumerate() {
 		// Convert &str to String for the key
-		let key = hash_str.to_string();
+		// let key = hash_str.to_string();
 
 		// Check if the key exists, and if not, insert a new vector
 		// Then, always push the index (as u128, ensuring it fits into u128)
-		buckets.entry(key).or_insert_with(Vec::new).push(i as u128);
+		buckets.entry(hash_str.to_owned()).or_insert_with(Vec::new).push(i as u128);
 	}
 
 	buckets
