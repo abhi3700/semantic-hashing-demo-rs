@@ -1,4 +1,6 @@
-mod constants;
-mod utils;
+pub mod utils;
+
+// #[cfg(test)]
+mod tests;
 
 fn main() {}
