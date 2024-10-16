@@ -13,6 +13,10 @@ pub(crate) const DATA_FILE: &str = "./data/fine_food_reviews_1k.csv";
 /// subspace address format prefix as seed for hyperplane generation
 pub(crate) const SEED: u64 = 2254;
 
+fn update_text(text: &String) -> String {
+	text.replace("\n", " ").replace("<br />", " ")
+}
+
 /// Get the embedding vector of a vec of texts with default OpenAI embedding small model.
 /// Small embedding model: 1536 len of float values.
 /// Large embedding model: 3072 len of float values.
@@ -20,10 +24,7 @@ pub(crate) async fn get_embeddings(text_samples: Vec<String>, model: &str) -> Ve
 	dotenv::dotenv().ok();
 	openai::set_key(std::env::var("OPENAI_API_KEY").expect("Provide OpenAI API key?"));
 
-	let owned_text_samples = text_samples
-		.iter()
-		.map(|text| text.replace('\n', " ").replace("<br />", ""))
-		.collect::<Vec<_>>();
+	let owned_text_samples = text_samples.iter().map(|text| update_text(text)).collect::<Vec<_>>();
 
 	// Then, create a Vec<&str> from the owned strings `Vec<String>`
 	let text_samples_refs = owned_text_samples.iter().map(AsRef::as_ref).collect::<Vec<&str>>();
